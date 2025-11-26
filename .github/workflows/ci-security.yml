@@ -1,0 +1,81 @@
+name: CI - SAST & DAST
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    env:
+      APP_PORT: 8080
+      APP_URL: http://localhost:8080
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # -------- SAST: SonarQube --------
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+
+      - name: Run SonarQube Scanner
+        uses: sonarsource/sonarqube-scan-action@v2
+        with:
+          projectBaseDir: .
+          args: > 
+            -Dsonar.projectKey=antrian-app
+            -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }}
+            -Dsonar.login=${{ secrets.SONAR_TOKEN }}
+
+      - name: Wait for SonarQube Quality Gate
+        uses: sonarsource/sonarqube-quality-gate-action@v1
+        with:
+          host: ${{ secrets.SONAR_HOST_URL }}
+          token: ${{ secrets.SONAR_TOKEN }}
+
+      # -------- Build & Run App --------
+      - name: Build Docker image
+        run: docker build -t antrian-app .
+
+      - name: Run App Container
+        run: docker run -d --name antrian -p 8080:80 antrian-app
+
+      - name: Wait for the app
+        run: |
+          sleep 10
+          curl -I $APP_URL
+
+      # -------- DAST: ZAP --------
+      - name: Pull ZAP image
+        run: docker pull ghcr.io/zaproxy/zaproxy:stable
+
+      - name: Run ZAP Baseline Scan
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/zap/wrk:rw \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py -t "${{ env.APP_URL }}" -r zap_report.html
+
+      - name: Upload ZAP Report
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: zap_report.html
+
+      # Fail pipeline jika ada high risk
+      - name: Fail on high risk
+        run: |
+          if grep -q "High" zap_report.html; then
+            echo "High risk found!"
+            exit 1
+          else
+            echo "No high risk found."
+          fi
+
+      # Cleanup
+      - name: Stop container
+        run: docker stop antrian
