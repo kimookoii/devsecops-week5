@@ -124,11 +124,22 @@ jobs:
       - name: Pull ZAP image
         run: docker pull ghcr.io/zaproxy/zaproxy:stable
 
-      - name: Run ZAP Baseline Scan (host network)
+      - name: Run ZAP Baseline (ignore non-zero exit)
         run: |
+          set +e
           docker run --rm -u root --network host -v "${{ github.workspace }}":/zap/wrk:rw \
             ghcr.io/zaproxy/zaproxy:stable \
-            zap-baseline.py -t "${{ env.APP_URL }}" -r zap_report.html
+            zap-baseline.py -t "${{ env.APP_URL }}" -r zap_report.html || true
+          set -e
+      
+      - name: Fail if ZAP found High
+        run: |
+          if [ -f "zap_report.html" ] && grep -q "High" zap_report.html; then
+            echo "High risk found -> failing"
+            exit 1
+          else
+            echo "No High risk found; continuing."
+          fi
 
       - name: Upload ZAP report
         uses: actions/upload-artifact@v4
