@@ -24,14 +24,17 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      # -------------------- Sanity: Sonar connectivity --------------------
+      # -------------------- Sanity: Sonar connectivity (debug) --------------------
       - name: Check Sonar connectivity (debug)
-        if: ${{ secrets.SONAR_HOST_URL != '' }}
         env:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: |
-          echo "Testing Sonar URL: $SONAR_HOST_URL"
-          curl -v --fail --max-time 10 "$SONAR_HOST_URL/api/server/version" || echo "Sonar not reachable (will fail later if required)."
+          if [ -z "${SONAR_HOST_URL}" ]; then
+            echo "SONAR_HOST_URL not set (secret missing). Skipping remote Sonar connectivity check."
+          else
+            echo "Testing Sonar URL: ${SONAR_HOST_URL}"
+            curl -v --fail --max-time 10 "${SONAR_HOST_URL}/api/server/version" || echo "Sonar not reachable (will fail later if required)."
+          fi
 
       # -------------------- SAST: SonarQube Scan --------------------
       - name: Run SonarQube Scanner
@@ -75,9 +78,13 @@ jobs:
         run: |
           if [ -f ".scannerwork/report-task.txt" ]; then
             ANALYSIS_ID=$(sed -n 's/^analysisId=//p' .scannerwork/report-task.txt)
-            echo "Analysis ID: $ANALYSIS_ID"
-            echo "Quality Gate API result:"
-            curl -s -u "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${ANALYSIS_ID}" | jq . || true
+            if [ -n "$ANALYSIS_ID" ]; then
+              echo "Analysis ID: $ANALYSIS_ID"
+              echo "Quality Gate API result:"
+              curl -s -u "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${ANALYSIS_ID}" | jq . || true
+            else
+              echo "analysisId not found in report-task.txt"
+            fi
           else
             echo "No report-task.txt to query Quality Gate."
           fi
@@ -139,10 +146,9 @@ jobs:
             echo "zap_report.html not found"
           fi
 
-    # -------------------- Cleanup (always) --------------------
-    post:
-      always:
-        - name: Stop and remove containers
-          run: |
-            echo "Cleaning up containers..."
-            docker rm -f antrian || true
+      # -------------------- Cleanup (always run) --------------------
+      - name: Stop and remove containers
+        if: always()
+        run: |
+          echo "Cleaning up containers..."
+          docker rm -f antrian || true
