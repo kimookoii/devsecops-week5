@@ -1,27 +1,10 @@
-# VCS
 .git
 .gitignore
-
-# Local config / secrets
 .env
-.env.local
-*.local
-*.pem
-*.key
-*.crt
-
-# Build artifacts, dependencies
-node_modules
 vendor
-dist
-build
-
-# IDE / OS files
+node_modules
 .DS_Store
-Thumbs.db
 .vscode
 .idea
-
-# Logs / temp
+tmp
 *.log
-tmp/
