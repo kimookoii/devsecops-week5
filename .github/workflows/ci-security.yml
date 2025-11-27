@@ -17,6 +17,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # install small utilities (jq needed for JSON pretty print)
+      - name: Install utils
+        run: sudo apt-get update && sudo apt-get install -y jq curl || true
+
       # -------------------- Setup Java --------------------
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -131,8 +135,28 @@ jobs:
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py -t "${{ env.APP_URL }}" -r zap_report.html || true
           set -e
-      
+
+      # Upload artifact BEFORE failing on High so report always available
+      - name: Upload ZAP report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: zap-report
+          path: zap_report.html
+
+      - name: Print ZAP High Alerts (debug)
+        if: always()
+        run: |
+          if [ -f "zap_report.html" ]; then
+            echo "=== ZAP High Alerts ==="
+            grep -n -C3 "High" zap_report.html || true
+            awk 'BEGIN{RS="<div class=\"alert\">";FS="\n"} /High/{print "----"; print $0; print "----"}' zap_report.html || true
+          else
+            echo "No zap_report.html"
+          fi
+
       - name: Fail if ZAP found High
+        if: always()
         run: |
           if [ -f "zap_report.html" ] && grep -q "High" zap_report.html; then
             echo "High risk found -> failing"
@@ -140,12 +164,6 @@ jobs:
           else
             echo "No High risk found; continuing."
           fi
-
-      - name: Upload ZAP report
-        uses: actions/upload-artifact@v4
-        with:
-          name: zap-report
-          path: zap_report.html
 
       - name: Show ZAP report snippet (debug)
         if: always()
