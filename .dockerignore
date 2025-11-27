@@ -1,0 +1,27 @@
+# VCS
+.git
+.gitignore
+
+# Local env / secrets
+.env
+.env.local
+*.local
+*.pem
+*.key
+*.crt
+
+# Build artifacts and dependencies
+node_modules
+vendor
+dist
+build
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode
+.idea
+
+# Logs / temp
+*.log
+tmp/
