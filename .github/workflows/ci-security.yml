@@ -23,12 +23,12 @@ jobs:
         with:
           distribution: 'temurin'
           java-version: '17'
-
+      
       - name: Run SonarQube Scanner
         uses: sonarsource/sonarqube-scan-action@v2
         with:
           projectBaseDir: .
-          args: > 
+          args: >
             -Dsonar.projectKey=antrian-app
             -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }}
             -Dsonar.login=${{ secrets.SONAR_TOKEN }}
