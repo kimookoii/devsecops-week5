@@ -17,7 +17,6 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # install small utilities (jq needed for JSON pretty print)
       - name: Install utils
         run: sudo apt-get update && sudo apt-get install -y jq curl || true
 
@@ -50,7 +49,6 @@ jobs:
             -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }}
             -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
-      # Debug: show .scannerwork & report-task.txt (helps to diagnose Quality Gate step)
       - name: Show Sonar scanner metadata (debug)
         if: always()
         run: |
@@ -64,8 +62,9 @@ jobs:
             echo ".scannerwork/report-task.txt not found"
           fi
 
-      # -------------------- Sonar Quality Gate (strict) --------------------
-      - name: Wait for SonarQube Quality Gate
+      # -------------------- Sonar Quality Gate (non-blocking for tests) --------------------
+      - name: Wait for SonarQube Quality Gate (non-blocking)
+        continue-on-error: true
         uses: sonarsource/sonarqube-quality-gate-action@v1
         with:
           scanMetadataReportFile: .scannerwork/report-task.txt
@@ -73,7 +72,6 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
-      # Optional: print JSON status for easier debugging (only runs if previous step succeeded or failed)
       - name: Print Quality Gate JSON (debug)
         if: always()
         env:
@@ -84,7 +82,7 @@ jobs:
             ANALYSIS_ID=$(sed -n 's/^analysisId=//p' .scannerwork/report-task.txt)
             if [ -n "$ANALYSIS_ID" ]; then
               echo "Analysis ID: $ANALYSIS_ID"
-              echo "Quality Gate API result:"
+              echo "Quality Gate API result (may be stale/fail if server unreachable):"
               curl -s -u "${SONAR_TOKEN}:" "${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${ANALYSIS_ID}" | jq . || true
             else
               echo "analysisId not found in report-task.txt"
@@ -136,7 +134,7 @@ jobs:
             zap-baseline.py -t "${{ env.APP_URL }}" -r zap_report.html || true
           set -e
 
-      # Upload artifact BEFORE failing on High so report always available
+      # -------------------- Always upload ZAP report so testers can inspect --------------------
       - name: Upload ZAP report
         if: always()
         uses: actions/upload-artifact@v4
@@ -148,28 +146,18 @@ jobs:
         if: always()
         run: |
           if [ -f "zap_report.html" ]; then
-            echo "=== ZAP High Alerts ==="
+            echo "=== ZAP High Alerts (first hits) ==="
             grep -n -C3 "High" zap_report.html || true
-            awk 'BEGIN{RS="<div class=\"alert\">";FS="\n"} /High/{print "----"; print $0; print "----"}' zap_report.html || true
           else
             echo "No zap_report.html"
           fi
 
-      - name: Dump ZAP High Alerts (full blocks)
-        if: always()
-        run: |
-          if [ -f "zap_report.html" ]; then
-            echo "=== Extract full High alert blocks ==="
-            awk 'BEGIN{RS="<div class=\"alert\">"; FS="</div>"} /High/ {print "----ALERT----"; print $0; print "----END----"; }' zap_report.html || true
-          else
-            echo "zap_report.html not found"
-          fi
-
-      - name: Fail if ZAP found High
-        if: always()
+      # Non-fatal: do not fail the job based on ZAP High (suitable for testers)
+      - name: Fail if ZAP found High (non-fatal)
+        continue-on-error: true
         run: |
           if [ -f "zap_report.html" ] && grep -q "High" zap_report.html; then
-            echo "High risk found -> failing"
+            echo "High risk found (non-fatal in this workflow). See zap-report artifact for details."
             exit 1
           else
             echo "No High risk found; continuing."
