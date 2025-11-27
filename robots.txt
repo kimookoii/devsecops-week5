@@ -1,4 +1,3 @@
 User-agent: *
 Disallow:
-
-Sitemap: https://example.com/sitemap.xml
+Sitemap: https://placeholder.local/sitemap.xml
