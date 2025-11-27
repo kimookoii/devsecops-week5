@@ -155,6 +155,16 @@ jobs:
             echo "No zap_report.html"
           fi
 
+      - name: Dump ZAP High Alerts (full blocks)
+        if: always()
+        run: |
+          if [ -f "zap_report.html" ]; then
+            echo "=== Extract full High alert blocks ==="
+            awk 'BEGIN{RS="<div class=\"alert\">"; FS="</div>"} /High/ {print "----ALERT----"; print $0; print "----END----"; }' zap_report.html || true
+          else
+            echo "zap_report.html not found"
+          fi
+
       - name: Fail if ZAP found High
         if: always()
         run: |
