@@ -2,7 +2,7 @@
 .git
 .gitignore
 
-# Local env / secrets
+# Local config / secrets
 .env
 .env.local
 *.local
@@ -10,13 +10,13 @@
 *.key
 *.crt
 
-# Build artifacts and dependencies
+# Build artifacts, dependencies
 node_modules
 vendor
 dist
 build
 
-# OS / IDE
+# IDE / OS files
 .DS_Store
 Thumbs.db
 .vscode
