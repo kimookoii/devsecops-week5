@@ -33,11 +33,26 @@ jobs:
             -Dsonar.host.url=${{ secrets.SONAR_HOST_URL }}
             -Dsonar.login=${{ secrets.SONAR_TOKEN }}
 
+      # Debug: pastikan scanner menghasilkan report-task.txt
+      - name: Show Sonar scanner metadata (debug)
+        run: |
+          echo "Listing .scannerwork directory (if exists):"
+          ls -la .scannerwork || true
+          echo "---- report-task.txt ----"
+          if [ -f ".scannerwork/report-task.txt" ]; then
+            sed -n '1,200p' .scannerwork/report-task.txt
+          else
+            echo ".scannerwork/report-task.txt not found"
+            exit 1
+          fi
+
       - name: Wait for SonarQube Quality Gate
         uses: sonarsource/sonarqube-quality-gate-action@v1
         with:
-          host: ${{ secrets.SONAR_HOST_URL }}
-          token: ${{ secrets.SONAR_TOKEN }}
+          scanMetadataReportFile: .scannerwork/report-task.txt
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
       # -------- Build & Run App --------
       - name: Build Docker image
@@ -48,8 +63,15 @@ jobs:
 
       - name: Wait for the app
         run: |
-          sleep 10
-          curl -I $APP_URL
+          for i in {1..30}; do
+            if curl -sSf "${{ env.APP_URL }}" >/dev/null 2>&1; then
+              echo "App is up"
+              exit 0
+            fi
+            echo "Waiting for app to be ready..."
+            sleep 2
+          done
+          echo "App did not start in time" && exit 1
 
       # -------- DAST: ZAP --------
       - name: Pull ZAP image
@@ -67,18 +89,18 @@ jobs:
           name: zap-report
           path: zap_report.html
 
-      # Fail pipeline jika ada high risk
+      # Fail pipeline jika ada high risk (sederhana)
       - name: Fail on high risk
         run: |
-          if grep -q "High" zap_report.html; then
-            echo "High risk found!"
+          if [ -f "zap_report.html" ] && grep -q "High" zap_report.html; then
+            echo "High risk found in ZAP report!"
             exit 1
           else
-            echo "No high risk found."
+            echo "No High risk found in ZAP report (or report missing)."
           fi
 
-      # Cleanup
+      # Cleanup (selalu dijalankan)
       - name: Stop container
-        run: docker stop antrian
-                
-
+        if: always()
+        run: |
+          docker rm -f antrian || true
