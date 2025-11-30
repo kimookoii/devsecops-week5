@@ -1,55 +1,225 @@
-> ⚠️ Informasi: Repository ini telah diarsipkan secara publik dan tidak akan menerima pembaruan lebih lanjut. Saat ini saya sedang fokus pada kegiatan kuliah dan magang, sehingga pengembangan proyek ini terpaksa saya hentikan dan tidak akan saya lanjutkan di kemudian hari. Saya menyadari bahwa aplikasi ini masih jauh dari sempurna dan belum menerapkan beberapa best practice, seperti struktur folder yang baik, standar keamanan, arsitektur sistem, serta penomoran versi yang konsisten. Mohon dimaklumi, dan semoga repository ini tetap bisa memberikan manfaat sebagai referensi atau bahan pembelajaran.
+# DevSecOps Week 5
 
-## Antrian 🏥
+## Continuous Integration with SAST & DAST Pipeline
 
-Saya membangun aplikasi web ini untuk Anda jika Anda mencari sebuah referensi aplikasi web antrian. Aplikasi ini layaknya pada aplikasi antrian di rumah sakit seperti memanggil loket antrian menggunakan suara. Dengan antarmuka yang sederhana menggunakan template sb admin 2, aplikasi ini memungkinkan pengelolaan antrian secara efisien dan dapat disesuaikan dengan berbagai kebutuhan institusi atau bisnis Anda.  
+![GitHub Actions](https://img.shields.io/github/actions/workflow/status/kimookoii/devsecops-week5/ci-security.yml?branch=main\&label=CI%20Security)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![PHP](https://img.shields.io/badge/PHP-8.2-green)
+![Docker](https://img.shields.io/badge/Docker-Enabled-lightgrey)
 
-Aplikasi web ini hanya terdapat admin saja untuk mengelola antrian pasien. Untuk masuk ke sistem gunakan username **admin_antrian_rs** dan password **Antr!anR$1234Secure**. Semoga aplikasi ini dapat memberikan inspirasi dan solusi dalam pengembangan sistem antrian yang lebih efektif.
+---
 
-## Fitur 📱
+## 1. Overview
 
-Untuk fitur, mohon Anda bisa melihat pada <a href="https://github.com/galihap76/antrian/releases/">rilis aplikasi</a>.
+Repository ini berisi implementasi pipeline DevSecOps yang mengintegrasikan SAST (Static Application Security Testing) menggunakan SonarQube dan DAST (Dynamic Application Security Testing) menggunakan OWASP ZAP. Pipeline dirancang untuk melakukan build, scanning otomatis, dan menghasilkan laporan keamanan setiap kali terjadi perubahan kode.
 
-## Install ⚙️
+---
 
-Jika Anda ingin menggunakan aplikasi web ini, cara nya cukup mudah. Ikuti langkah langkah ini :
+## 2. Arsitektur DevSecOps Pipeline
 
-1. Lakukan git clone :
+```mermaid
+flowchart LR
+    A[Developer Commit Code] --> B[GitHub Actions CI]
+    B --> C[Build Docker Image]
+    C --> D[SAST Scan SonarQube]
+    C --> E[Deploy Temp Container]
+    E --> F[DAST Scan OWASP ZAP]
+    D --> G[Generate SAST Report]
+    F --> H[Generate ZAP Report]
+    G --> I[Quality Gate]
+    H --> I
+    I --> J[Review & Fix]
 ```
-git clone https://github.com/galihap76/antrian.git
+
+Diagram di atas menggambarkan alur otomatis pada pipeline CI: setiap commit memicu proses build, analisis kode, pengujian aplikasi secara dinamis, hingga pembuatan laporan keamanan.
+
+---
+
+## 3. Materi DevSecOps yang Diimplementasikan
+
+### 3.1 Static Application Security Testing (SAST)
+
+SAST memeriksa kode sumber sebelum dijalankan. Tools yang digunakan:
+
+* SonarQube Scanner
+* SonarQube Quality Gate
+
+Manfaat:
+
+* Deteksi dini SQL Injection, XSS, Hardcoded Credentials, Code Smell
+* Identifikasi potential bug dan security hotspot
+
+### 3.2 Dynamic Application Security Testing (DAST)
+
+DAST memeriksa aplikasi yang sedang berjalan menggunakan OWASP ZAP:
+
+* Baseline scan terhadap endpoint utama aplikasi
+* Deteksi XSS, CSP missing, CORS misconfig, Cookie flags weakness, Server header leaks
+
+### 3.3 CI/CD Integration
+
+Pipeline dibangun menggunakan GitHub Actions dengan kemampuan:
+
+* Build image otomatis
+* Security scanning otomatis
+* Upload laporan
+* Quality gate evaluation
+
+---
+
+## 4. Step-by-Step Build dan Scan
+
+### 4.1 Build Docker Image
+
 ```
- 
-2. Import database nya yang berada pada folder **assets/** pada nama file database **db_antrian.sql**.
-
-3. Lalu Anda sudah bisa mencoba aplikasi web nya dengan mengakses URL :
-```
-http://localhost/antrian/login.php
+docker build -t antrian-app .
 ```
 
-4. Selesai.
+### 4.2 Run Application Container
 
-## Screenshots 📸
+```
+docker run -d --name antrian -p 8080:80 antrian-app
+```
 
-| ![image](https://github.com/user-attachments/assets/935455cf-5c0a-43c4-913b-6b607fe3c35a) | ![image](https://github.com/user-attachments/assets/8cebab0e-8044-402b-a217-786b67ca4bc5)
-| ------------------------------------------------------------ | ------------------------------------------------------------ |
-| Login                                        | Dashboard                      |
-| ![image](https://github.com/user-attachments/assets/9d700efe-0fcd-4e33-a5d6-594d8787fc7e) | ![image](https://github.com/user-attachments/assets/a7f59e35-5f0c-48be-b550-b3d4570cf886)
-| Tambah Antrian                                        | Hapus Antrian                      |
-| ![image](https://github.com/user-attachments/assets/2c7d4046-8dcd-46c6-aa59-613e1245168b) | ![image](https://github.com/user-attachments/assets/9d93f7d4-f35d-4fbc-bb80-b2e6a3e790e6)
-|  Panggilan Manual                                        | Panggil Antrian                      |
-| ![image](https://github.com/user-attachments/assets/af49aa1a-c051-4e46-b408-b08a993851e6) | ![image](https://github.com/user-attachments/assets/49ddae15-b412-43e3-bb22-65007262db77)
-| Panggil Ulang Antrian | Ganti Password
+### 4.3 SonarQube SAST Scan
 
-## Voice 🔊
+```
+sonar-scanner \
+  -Dsonar.projectKey=antrian-app \
+  -Dsonar.sources=. \
+  -Dsonar.host.url=http://localhost:9000 \
+  -Dsonar.login=YOUR_TOKEN
+```
 
-Pada sistem voice, saya menggunakan API yang berbeda yaitu menggunakan API bawahan browser google chrome dan API eksternal pada <a href="https://responsivevoice.org/">responsivevoice.org</a>. Alasan kenapa saya menggunakan API yang berbeda, karena API bawahan browser google chrome tidak tersedia pada browser lain.
+### 4.4 OWASP ZAP DAST Scan
 
-Jadi, saya harus menggunakan API eksternal untuk mendukung browser lain agar pemanggilan suara antrian bisa bekerja pada semua browser. Kekurangan menggunakan API eksternal yang saya pakai secara gratis terkadang bisa delay untuk pemanggilan antrian. Saya sarankan gunakan browser google chrome untuk menjalankan aplikasi web antrian ini agar cepat memanggil antrian.
+```
+docker run --rm -u root --network host \
+  -v $(pwd):/zap/wrk:rw \
+  ghcr.io/zaproxy/zaproxy:stable \
+  zap-baseline.py -t "http://localhost:8080" -r zap_report.html
+```
 
-## Penutup
+---
 
-Perlu diingat kembali bahwa aplikasi web ini dirancang sebagai referensi bagi seseorang yang sedang mencari contoh aplikasi antrian. Anda diperbolehkan untuk mengubah source code ini, termasuk mengubah struktur folder. Saya merekomendasikan agar Anda mempertimbangkan untuk mengubahnya menjadi arsitektur MVC menggunakan PHP native agar lebih optimal.
+## 5. Contoh CVE dan Mitigasi
 
-Karena aplikasi web ini masih memiliki beberapa kekurangan, saya akan melakukan pembaruan jika ada waktu. Aplikasi ini dibangun menggunakan PHP versi 8.2, jadi pastikan untuk menyesuaikan versi PHP di lingkungan Anda. Jika Anda memiliki pertanyaan silakan tekan tombol <a href="https://github.com/galihap76/antrian/issues">issues</a>. Terima kasih.
+### 5.1 CSP Header Missing
 
-"# devsecops-week5" 
+**CVE Category:** XSS
+**Dampak:** Browser tidak memiliki kontrol terhadap sumber script.
+**Mitigasi:**
+
+```
+Header always set Content-Security-Policy "default-src 'self'; script-src 'self';"
+```
+
+### 5.2 Server Version Disclosure
+
+**CVE Category:** Information Exposure
+**Dampak:** Penyerang dapat mengetahui versi Apache.
+**Mitigasi:**
+
+```
+ServerSignature Off
+ServerTokens Prod
+Header unset Server
+```
+
+### 5.3 Cookie Flags Missing
+
+**CVE Category:** Session Hijacking
+**Mitigasi (PHP):**
+
+```php
+ini_set('session.cookie_httponly', 1);
+ini_set('session.cookie_secure', 1);
+ini_set('session.cookie_samesite', 'Lax');
+```
+
+### 5.4 Missing Cache Control on Sensitive Pages
+
+**Mitigasi:**
+
+```php
+header('Cache-Control: no-store, no-cache, must-revalidate');
+```
+
+---
+
+## 6. Integrasi GitHub Actions
+
+### File: `.github/workflows/ci-security.yml`
+
+Pipeline ini mencakup:
+
+* Setup Java
+* SonarQube Scanner
+* Quality Gate
+* Docker Build & Run
+* OWASP ZAP Baseline Scan
+* Upload report
+
+Semua temuan High tidak menghentikan proses (non-blocking) untuk kebutuhan testing.
+
+---
+
+## 7. Struktur Repository
+
+```
+.
+├── auth/
+│   ├── db.php
+│   └── csrf-security/
+├── ajax/
+│   ├── updateNoAntrian.php
+├── assets/
+├── Dockerfile
+├── sonar-project.properties
+├── README.md
+└── .github/
+    └── workflows/
+        └── ci-security.yml
+```
+
+---
+
+## 8. Quality Gate
+
+Quality Gate digunakan sebagai penentu apakah kode layak dirilis berdasarkan:
+
+* Bugs
+* Vulnerabilities
+* Code Smells
+* Coverage
+* Security Hotspots
+
+Untuk lingkungan testing, quality gate dibuat non-blocking agar pipeline tetap berjalan.
+
+---
+
+## 9. Security Headers Rekomendasi
+
+Tambahkan pada Apache:
+
+```
+Header always set X-Content-Type-Options "nosniff"
+Header always set X-Frame-Options "SAMEORIGIN"
+Header always set Referrer-Policy "no-referrer"
+Header always set Cross-Origin-Resource-Policy "same-origin"
+Header always set Cross-Origin-Embedder-Policy "require-corp"
+```
+
+---
+
+## 10. Kesimpulan
+
+Repository ini menunjukkan implementasi pipeline DevSecOps modern menggunakan:
+
+* GitHub Actions
+* SonarQube untuk SAST
+* OWASP ZAP untuk DAST
+* Docker containerization
+* Security headers hardening
+
+Pipeline ini dapat dijadikan dasar untuk pengembangan aplikasi yang aman dan siap di-deploy.
